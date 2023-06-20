@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -30,6 +31,13 @@ var (
 		Name:  "verbosity",
 		Usage: "Set the verbosity of the logger",
 		Value: "info",
+	}
+
+	outputFormatFlag = &cli.StringFlag{
+		Name:    "output",
+		Aliases: []string{"o"},
+		Usage:   "Set the output format",
+		Value:   "json",
 	}
 
 	nowPlayingFlag = &cli.BoolFlag{
@@ -94,6 +102,17 @@ func cleanup(ctx *cli.Context, steps ...func()) {
 	}
 }
 
+func results(ctx *cli.Context, movies []core.ExtendedMovie) error {
+	switch ctx.String(outputFormatFlag.Name) {
+	case "json":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(movies)
+	default:
+		return fmt.Errorf("unsupported output format %s", ctx.String(outputFormatFlag.Name))
+	}
+}
+
 var Scrapers = []*cli.Command{
 	{
 		Name:     "hollywood-theatre",
@@ -102,6 +121,7 @@ var Scrapers = []*cli.Command{
 		Flags: []cli.Flag{
 			verbosityFlag,
 			profileFlag,
+			outputFormatFlag,
 			nowPlayingFlag,
 		},
 		Action: func(c *cli.Context) error {
@@ -128,8 +148,7 @@ var Scrapers = []*cli.Command{
 				return err
 			}
 
-			zap.L().Info("Found movies", zap.Any("movies", movies))
-			return nil
+			return results(c, movies)
 		},
 	},
 	{
@@ -139,6 +158,7 @@ var Scrapers = []*cli.Command{
 		Flags: []cli.Flag{
 			verbosityFlag,
 			profileFlag,
+			outputFormatFlag,
 		},
 		ArgsUsage: "movie-madness [search term]",
 		Action: func(c *cli.Context) error {
@@ -154,8 +174,7 @@ var Scrapers = []*cli.Command{
 				return err
 			}
 
-			zap.L().Info("Found movies", zap.Any("movies", movies))
-			return nil
+			return results(c, movies)
 		},
 	},
 }

@@ -16,6 +16,6 @@ func main() {
 		Commands: commands.Scrapers,
 	}
 	if err := app.Run(os.Args); err != nil {
-		zap.L().Fatal("Failed to start perf test")
+		zap.L().Fatal("Fatal error", zap.Error(err))
 	}
 }
