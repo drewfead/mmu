@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func Get[OUT any](
+func SimpleGet[OUT any](
 	ctx context.Context,
 	url string,
 	requestHeaders map[string]string,
@@ -19,9 +19,9 @@ func Get[OUT any](
 	c := colly.NewCollector(colly.Async(true))
 	hits := make(chan OUT)
 	errs := make(chan error)
-	c.OnRequest(injectRequestHeaders(requestHeaders))
-	c.OnResponse(logResponses())
-	c.OnResponse(reportBadResponses(url, errs))
+	c.OnRequest(InjectRequestHeaders(requestHeaders))
+	c.OnResponse(LogResponses())
+	c.OnResponse(ReportBadResponses(url, errs))
 	c.OnHTML(elementSelector, func(e *colly.HTMLElement) {
 		hit, err := transformElement(e)
 		if err != nil {
@@ -57,7 +57,7 @@ func Get[OUT any](
 	}
 }
 
-func reportBadResponses(url string, errorChannel chan<- error) func(r *colly.Response) {
+func ReportBadResponses(url string, errorChannel chan<- error) func(r *colly.Response) {
 	return func(r *colly.Response) {
 		if r.StatusCode != http.StatusOK {
 			errorChannel <- fmt.Errorf("got status code %d from %s", r.StatusCode, url)
@@ -65,13 +65,13 @@ func reportBadResponses(url string, errorChannel chan<- error) func(r *colly.Res
 	}
 }
 
-func logResponses() func(r *colly.Response) {
+func LogResponses() func(r *colly.Response) {
 	return func(r *colly.Response) {
 		zap.L().Debug("response", zap.Int("status", r.StatusCode), zap.String("body", string(r.Body)))
 	}
 }
 
-func injectRequestHeaders(headers map[string]string) func(r *colly.Request) {
+func InjectRequestHeaders(headers map[string]string) func(r *colly.Request) {
 	return func(r *colly.Request) {
 		for k, v := range headers {
 			r.Headers.Set(k, v)

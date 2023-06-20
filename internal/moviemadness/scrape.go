@@ -82,14 +82,14 @@ func (sc *Scraper) Search(
 
 	searchURL := fmt.Sprintf("%s/search/?field=%s&query=%s", sc.BaseURL, field, inQuery.String())
 
-	return scraping.Get(
+	return scraping.SimpleGet(
 		ctx,
 		searchURL,
 		map[string]string{"Referer": searchURL},
 		searchResultClass,
 		func(h *colly.HTMLElement) (ExtendedMovie, error) {
 			title := h.ChildText(searchResultTitleClass + " > h3")
-			categorySearchLinks := h.ChildAttrs(searchResultCategoryClass+" > h3 > a", "href")
+			categorySearchLinks := h.ChildAttrs(searchResultCategoryClass+" > a", "href")
 			return ExtendedMovie{
 				Movie: core.Movie{
 					Title: title,
