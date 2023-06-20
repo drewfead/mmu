@@ -6,8 +6,6 @@ import (
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
-	_ "go.uber.org/automaxprocs"
-
 	"github.com/drewfead/mmu/internal/commands"
 )
 

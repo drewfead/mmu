@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -9,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/urfave/cli/v2"
+	"go.uber.org/automaxprocs/maxprocs"
+	"go.uber.org/zap"
+
 	"github.com/drewfead/mmu/internal/core"
 	"github.com/drewfead/mmu/internal/hollywood"
 	"github.com/drewfead/mmu/internal/moviemadness"
-	"github.com/urfave/cli/v2"
-	"go.uber.org/zap"
 )
 
 var (
@@ -48,6 +51,9 @@ func setup(ctx *cli.Context) []func() {
 		log.Fatalf("failed to initialize logger: %v", err)
 	}
 	zap.ReplaceGlobals(logger)
+	maxprocs.Set(maxprocs.Logger(func(format string, args ...interface{}) {
+		zap.L().Debug(fmt.Sprintf(format, args...))
+	}))
 
 	var out []func()
 
