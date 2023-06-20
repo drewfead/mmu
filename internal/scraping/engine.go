@@ -20,7 +20,7 @@ func SimpleGet[OUT any](
 	hits := make(chan OUT)
 	errs := make(chan error)
 	c.OnRequest(InjectRequestHeaders(requestHeaders))
-	c.OnResponse(LogResponses())
+	c.OnResponse(LogResponses(c))
 	c.OnResponse(ReportBadResponses(url, errs))
 	c.OnHTML(elementSelector, func(e *colly.HTMLElement) {
 		hit, err := transformElement(e)
@@ -65,9 +65,10 @@ func ReportBadResponses(url string, errorChannel chan<- error) func(r *colly.Res
 	}
 }
 
-func LogResponses() func(r *colly.Response) {
+func LogResponses(c *colly.Collector) func(r *colly.Response) {
 	return func(r *colly.Response) {
-		zap.L().Debug("response", zap.Int("status", r.StatusCode), zap.String("body", string(r.Body)))
+		cookies := c.Cookies(r.Request.URL.String())
+		zap.L().Debug("response", zap.Int("status", r.StatusCode), zap.String("body", string(r.Body)), zap.Any("cookies", cookies))
 	}
 }
 
