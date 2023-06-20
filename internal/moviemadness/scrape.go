@@ -89,6 +89,13 @@ func (sc *Scraper) Search(
 		func(h *colly.HTMLElement) (core.ExtendedMovie, error) {
 			title := h.ChildText(searchResultTitleClass + " > h3")
 			categorySearchLinks := h.ChildAttrs(searchResultCategoryClass+" > a", "href")
+			for i, link := range categorySearchLinks {
+				link = strings.ReplaceAll(link, " ", "+")
+				if !strings.HasPrefix(link, "https://") {
+					link = fmt.Sprintf("%s/%s", sc.BaseURL, strings.TrimPrefix(link, "/"))
+				}
+				categorySearchLinks[i] = link
+			}
 			return core.ExtendedMovie{
 				Movie: core.Movie{
 					Title: title,

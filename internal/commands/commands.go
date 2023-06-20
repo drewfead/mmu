@@ -107,6 +107,7 @@ func results(ctx *cli.Context, movies []core.ExtendedMovie) error {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
+		enc.SetEscapeHTML(false)
 		return enc.Encode(movies)
 	default:
 		return fmt.Errorf("unsupported output format %s", ctx.String(outputFormatFlag.Name))
