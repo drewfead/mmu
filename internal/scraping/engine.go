@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gocolly/colly/v2"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
@@ -16,10 +17,14 @@ func SimpleGet[OUT any](
 	elementSelector string,
 	transformElement func(*colly.HTMLElement) (OUT, error),
 ) ([]OUT, error) {
+	ctx, span := otel.Tracer("scraping").Start(ctx, "simple_get")
+	defer span.End()
+
 	c := colly.NewCollector(colly.Async(true))
 	hits := make(chan OUT)
 	errs := make(chan error)
 	c.OnRequest(InjectRequestHeaders(requestHeaders))
+	c.OnRequest(AddOutgoingContext(ctx))
 	c.OnResponse(LogResponses(c))
 	c.OnResponse(ReportBadResponses(url, errs))
 	c.OnHTML(elementSelector, func(e *colly.HTMLElement) {
@@ -77,5 +82,14 @@ func InjectRequestHeaders(headers map[string]string) func(r *colly.Request) {
 		for k, v := range headers {
 			r.Headers.Set(k, v)
 		}
+	}
+}
+
+func AddOutgoingContext(ctx context.Context) func(r *colly.Request) {
+	return func(r *colly.Request) {
+		go func() {
+			<-ctx.Done()
+			r.Abort()
+		}()
 	}
 }

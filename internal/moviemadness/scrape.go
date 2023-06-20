@@ -8,6 +8,7 @@ import (
 	"github.com/drewfead/mmu/internal/core"
 	"github.com/drewfead/mmu/internal/scraping"
 	"github.com/gocolly/colly/v2"
+	"go.opentelemetry.io/otel"
 )
 
 type Scraper struct {
@@ -61,16 +62,14 @@ const (
 	searchResultCategoryClass = ".category"
 )
 
-type ExtendedMovie struct {
-	core.Movie
-	Data map[string]any
-}
-
 func (sc *Scraper) Search(
 	ctx context.Context,
 	field SearchField,
 	query string,
-) ([]ExtendedMovie, error) {
+) ([]core.ExtendedMovie, error) {
+	ctx, span := otel.Tracer("moviemadness.scraper").Start(ctx, "search")
+	defer span.End()
+
 	inQuery := strings.Builder{}
 	queryFields := strings.Fields(query)
 	for i, f := range strings.Fields(query) {
@@ -87,10 +86,10 @@ func (sc *Scraper) Search(
 		searchURL,
 		map[string]string{"Referer": searchURL},
 		searchResultClass,
-		func(h *colly.HTMLElement) (ExtendedMovie, error) {
+		func(h *colly.HTMLElement) (core.ExtendedMovie, error) {
 			title := h.ChildText(searchResultTitleClass + " > h3")
 			categorySearchLinks := h.ChildAttrs(searchResultCategoryClass+" > a", "href")
-			return ExtendedMovie{
+			return core.ExtendedMovie{
 				Movie: core.Movie{
 					Title: title,
 				},

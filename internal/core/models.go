@@ -3,12 +3,17 @@ package core
 import "time"
 
 type Showtime struct {
-	At time.Time
+	At      time.Time
+	LinkURL string
 }
 
 type Screening struct {
-	Location  string
-	Showtimes []Showtime
+	Location   string
+	SeriesName string
+	SeriesLink string
+	LinkURL    string
+	Showtimes  []Showtime
+	ImageURLs  []string
 }
 
 type FormatSpecificAvailability struct {
@@ -22,7 +27,12 @@ type Availability struct {
 }
 
 type Movie struct {
-	Title        string
-	Screenings   []Screening
-	Availability []Availability
+	Title      string
+	Screenings []Screening
+	// Availability []Availability
+}
+
+type ExtendedMovie struct {
+	Movie
+	Data map[string]any
 }

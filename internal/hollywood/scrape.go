@@ -2,26 +2,56 @@ package hollywood
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
-	"github.com/drewfead/mmu/internal/core"
-	"github.com/drewfead/mmu/internal/scraping"
 	"github.com/gocolly/colly/v2"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
+
+	"github.com/drewfead/mmu/internal/core"
+	"github.com/drewfead/mmu/internal/scraping"
 )
 
-type ExtendedMovie struct {
-	core.Movie
-	Data map[string]any
+type Scraper struct {
+	BaseURL  string
+	TimeZone *time.Location
+
+	session *hollywoodTheatreDotOrgSession
+	sync.Mutex
 }
 
-type Scraper struct {
-	BaseURL string
+func (s *Scraper) ComingSoon(ctx context.Context) ([]core.ExtendedMovie, error) {
+	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "coming_soon")
+	defer span.End()
+
+	if err := s.initCurrent(ctx); err != nil {
+		return nil, err
+	}
+	return s.calendar(ctx)
+}
+
+func (s *Scraper) NowPlaying(ctx context.Context) ([]core.ExtendedMovie, error) {
+	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "now_playing")
+	defer span.End()
+
+	s.Lock()
+
+	if s.session != nil && s.session.tab != "now_playing" {
+		s.session = nil
+		s.Unlock()
+		return s.calendar(ctx)
+	}
+
+	s.Unlock()
+	return s.calendar(ctx)
 }
 
 type showtime struct {
@@ -64,34 +94,52 @@ type changeTargetMessage struct {
 }
 
 type cableReadyMessage struct {
-	Identifier string         `json:"identifier"`
-	Type       string         `json:"type"`
-	CableReady bool           `json:"cableReady"`
-	Operations map[string]any `json:"operations"`
+	Identifier string          `json:"identifier"`
+	Type       string          `json:"type"`
+	CableReady bool            `json:"cableReady"`
+	Operations json.RawMessage `json:"operations"`
 }
 
-func (s *Scraper) Calendar(ctx context.Context) ([]ExtendedMovie, error) {
-	initSession := colly.NewCollector()
-	initSession.OnRequest(scraping.InjectRequestHeaders(map[string]string{
+type hollywoodTheatreDotOrgSession struct {
+	sessionID string
+	csrfToken string
+	tab       string
+}
+
+func (s *Scraper) initCurrent(ctx context.Context) error {
+	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "init_current")
+	defer span.End()
+
+	s.Lock()
+	defer s.Unlock()
+
+	if s.session != nil && s.session.tab == "coming_soon" {
+		return nil
+	}
+
+	errs := make(chan error)
+	session := make(chan *hollywoodTheatreDotOrgSession, 1)
+
+	c := colly.NewCollector(colly.Async(true))
+	c.OnRequest(scraping.InjectRequestHeaders(map[string]string{
 		"Referer": fmt.Sprintf("%s/coming-soon/", s.BaseURL),
 	}))
-	initSession.OnResponse(scraping.LogResponses(initSession))
-	initSession.OnResponse(scraping.ReportBadResponses(s.BaseURL, nil))
-	var failedInit error
-	var csrfToken string
-	var sessionID string
-	initSession.OnResponse(func(r *colly.Response) {
-		ctx, cancel := context.WithCancel(context.Background())
+	c.OnRequest(scraping.AddOutgoingContext(ctx))
+	c.OnResponse(scraping.LogResponses(c))
+	c.OnResponse(scraping.ReportBadResponses(s.BaseURL, nil))
+	c.OnResponse(func(r *colly.Response) {
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		for _, cookie := range initSession.Cookies(s.BaseURL) {
+		var csrfToken string
+		for _, cookie := range c.Cookies(s.BaseURL) {
 			if cookie.Name == "csrftoken" {
 				csrfToken = cookie.Value
 				break
 			}
 		}
 		if csrfToken == "" {
-			failedInit = fmt.Errorf("failed to get csrfToken")
+			errs <- fmt.Errorf("failed to get csrfToken")
 			return
 		}
 		schemeless := strings.TrimPrefix(s.BaseURL, "https://")
@@ -104,11 +152,11 @@ func (s *Scraper) Calendar(ctx context.Context) ([]ExtendedMovie, error) {
 			CompressionMode: websocket.CompressionContextTakeover,
 		})
 		if resp.StatusCode != http.StatusSwitchingProtocols {
-			failedInit = fmt.Errorf("failed to upgrade to WebSocket: %s", resp.Status)
+			errs <- fmt.Errorf("failed to upgrade to WebSocket: %s", resp.Status)
 			return
 		}
 		if err != nil {
-			failedInit = err
+			errs <- err
 			return
 		}
 		defer c.Close(websocket.StatusNormalClosure, "Done")
@@ -117,13 +165,15 @@ func (s *Scraper) Calendar(ctx context.Context) ([]ExtendedMovie, error) {
 			Type:        "subscribe",
 			ChannelName: sockpuppetChannelName,
 		}); err != nil {
-			failedInit = err
+			errs <- err
 			return
 		}
 
+		var sessionID string
+
 		var csm createSessionMessage
 		if err := wsjson.Read(ctx, c, &csm); err != nil {
-			failedInit = err
+			errs <- err
 			return
 		}
 		if csm.Key == "sessionid" {
@@ -157,52 +207,82 @@ func (s *Scraper) Calendar(ctx context.Context) ([]ExtendedMovie, error) {
 			XPathController:        "//*[@id='hwtController']/div[2]/div[2]",
 			XPathElement:           "//*[@id='hwtController']/div[2]/div[2]",
 		}); err != nil {
-			failedInit = err
+			errs <- err
 			return
 		}
-
-		c.SetReadLimit(1024 * 1024 * 1024)
+		c.SetReadLimit(1024 * 1024)
 
 		var crm cableReadyMessage
 		if err := wsjson.Read(ctx, c, &crm); err != nil {
-			failedInit = err
+			errs <- err
 			return
 		}
 		zap.L().Debug("cableReadyMessage", zap.Any("crm", crm))
+
+		if sessionID == "" {
+			errs <- fmt.Errorf("failed to get sessionID")
+		}
+
+		session <- &hollywoodTheatreDotOrgSession{
+			sessionID: sessionID,
+			csrfToken: csrfToken,
+			tab:       "coming_soon",
+		}
 	})
 
-	initSession.Visit(s.BaseURL)
+	c.Visit(s.BaseURL)
 
-	if failedInit != nil {
-		return nil, failedInit
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errs:
+			if err != nil {
+				return err
+			}
+		case sess := <-session:
+			if sess != nil {
+				s.session = sess
+				return nil
+			}
+		}
+	}
+}
+
+func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
+	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "calendar")
+	defer span.End()
+
+	s.Lock()
+	defer s.Unlock()
+
+	headers := map[string]string{
+		"Referer": fmt.Sprintf("%s/coming-soon/", s.BaseURL),
 	}
 
-	if sessionID == "" {
-		return nil, fmt.Errorf("failed to get sessionID")
+	if s.session != nil {
+		headers["Cookie"] = fmt.Sprintf("csrftoken=%s; sessionid=%s", s.session.csrfToken, s.session.sessionID)
 	}
 
 	c := colly.NewCollector(colly.Async(true))
-	hits := make(chan ExtendedMovie)
+	hits := make(chan core.ExtendedMovie)
 	errs := make(chan error)
-	c.OnRequest(scraping.InjectRequestHeaders(map[string]string{
-		"Referer": fmt.Sprintf("%s/coming-soon/", s.BaseURL),
-		"Cookie":  fmt.Sprintf("csrftoken=%s; sessionid=%s", csrfToken, sessionID),
-	}))
+	c.OnRequest(scraping.InjectRequestHeaders(headers))
 	c.OnResponse(scraping.LogResponses(c))
 	c.OnResponse(scraping.ReportBadResponses(s.BaseURL, errs))
 
 	c.OnHTML(".event-grid-item", func(e *colly.HTMLElement) {
-		seriesName := e.ChildText(".event-grid-header > a.event_list__series_name")
+		seriesName := strings.TrimSpace(e.ChildText(".event-grid-header > a.event_list__series_name"))
 		seriesLink := e.ChildAttr(".event-grid-header > a.event_list__series_name", "href")
 		dataEventID := e.ChildAttr(".event-grid-header > div > h3 > a", "data-event-id")
-		title := e.ChildText(".event-grid-header > div > h3 > a")
+		title := strings.TrimSpace(e.ChildText(".event-grid-header > div > h3 > a"))
 		images := make(map[string]string)
 		e.ForEach(".event_list__image > a > picture > source", func(_ int, imgSrc *colly.HTMLElement) {
 			images[imgSrc.Attr("type")] = imgSrc.Attr("srcset")
 		})
 		showtimes := make(map[string][]showtime)
 		e.ForEach(".event-grid-showtimes > div > div > div.carousel-item", func(_ int, carouselItem *colly.HTMLElement) {
-			day := carouselItem.ChildText("h4.showtimes_date_header")
+			day := strings.TrimSpace(carouselItem.ChildText("h4.showtimes_date_header"))
 			if day == "" {
 				return
 			}
@@ -211,22 +291,49 @@ func (s *Scraper) Calendar(ctx context.Context) ([]ExtendedMovie, error) {
 			}
 			carouselItem.ForEach("div.showtime-square > a", func(_ int, showtimeSq *colly.HTMLElement) {
 				ticketLink := showtimeSq.Attr("href")
-				time := showtimeSq.Text
+				time := strings.TrimSpace(showtimeSq.Text)
 				showtimes[day] = append(showtimes[day], showtime{ticketLink: ticketLink, time: time})
 			})
 		})
-		hits <- ExtendedMovie{
+
+		hollywoodScreening := core.Screening{
+			Location:   "Hollywood Theatre",
+			SeriesName: seriesName,
+			SeriesLink: seriesLink,
+			LinkURL:    fmt.Sprintf("%s/events/%s/", s.BaseURL, dataEventID),
+		}
+
+		if webpImg, hasWebP := images["image/webp"]; hasWebP {
+			hollywoodScreening.ImageURLs = append(hollywoodScreening.ImageURLs, webpImg)
+		} else if pngImg, hasPNG := images["image/png"]; hasPNG {
+			hollywoodScreening.ImageURLs = append(hollywoodScreening.ImageURLs, pngImg)
+		}
+
+		for dayStr, times := range showtimes {
+			for _, show := range times {
+				day, err := time.Parse("Monday, January 2", dayStr)
+				if err != nil {
+					continue
+				}
+				timeOffset, err := time.Parse("3:04 PM", show.time)
+				if err != nil {
+					continue
+				}
+				hollywoodScreening.Showtimes = append(hollywoodScreening.Showtimes, core.Showtime{
+					At:      day.Add(timeOffset.Sub(time.Date(0, 0, 0, 0, 0, 0, 0, s.TimeZone))),
+					LinkURL: show.ticketLink,
+				})
+			}
+		}
+
+		out := core.ExtendedMovie{
 			Movie: core.Movie{
-				Title: title,
-			},
-			Data: map[string]any{
-				"seriesName":  seriesName,
-				"seriesLink":  seriesLink,
-				"dataEventID": dataEventID,
-				"images":      images,
-				"showtimes":   showtimes,
+				Title:      title,
+				Screenings: []core.Screening{hollywoodScreening},
 			},
 		}
+
+		hits <- out
 	})
 
 	c.OnScraped(func(r *colly.Response) {
@@ -238,7 +345,7 @@ func (s *Scraper) Calendar(ctx context.Context) ([]ExtendedMovie, error) {
 		c.Visit(s.BaseURL)
 	}()
 
-	var out []ExtendedMovie
+	var out []core.ExtendedMovie
 	for {
 		select {
 		case <-ctx.Done():
