@@ -75,7 +75,12 @@ func ReportBadResponses(url string, errorChannel chan<- error) func(r *colly.Res
 func LogResponses(c *colly.Collector) func(r *colly.Response) {
 	return func(r *colly.Response) {
 		cookies := c.Cookies(r.Request.URL.String())
-		zap.L().Debug("response", zap.Int("status", r.StatusCode), zap.String("body", string(r.Body)), zap.Any("cookies", cookies))
+		zap.L().Debug(
+			"response",
+			zap.Int("status", r.StatusCode),
+			zap.String("body", string(r.Body)),
+			zap.Any("cookies", cookies),
+		)
 	}
 }
 
