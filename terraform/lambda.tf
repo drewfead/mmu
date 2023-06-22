@@ -23,4 +23,5 @@ resource "aws_lambda_function" "theater_scraper" {
   source_code_hash = filebase64sha256("${path.module}/../lambda/bin/lambda-handler.zip")
 
   runtime = "go1.x"
+  timeout = 20
 }
