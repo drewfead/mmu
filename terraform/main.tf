@@ -4,12 +4,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 4"
     }
-    archive = {
-      source = "hashicorp/archive"
-    }
-    null = {
-      source = "hashicorp/null"
-    }
   }
 
   backend "s3" {
