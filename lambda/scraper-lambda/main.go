@@ -11,15 +11,15 @@ import (
 	"github.com/drewfead/mmu/internal/commands"
 )
 
-type MyEvent struct {
+type LambdaEvent struct {
 	Arg string `json:"Arg"`
 }
 
-type MyResponse struct {
+type LambdaResponse struct {
 	Output string `json:"Output:"`
 }
 
-func lambda_handler(ctx context.Context, event MyEvent) (MyResponse, error) {
+func lambda_handler(ctx context.Context, event LambdaEvent) (LambdaResponse, error) {
 	app := &cli.App{
 		Name:     "mmu",
 		Usage:    "A utility for scraping websites for data about upcoming theatrical showings and home-video availability",
@@ -28,10 +28,10 @@ func lambda_handler(ctx context.Context, event MyEvent) (MyResponse, error) {
 
 	err := app.RunContext(ctx, []string{"mmu", event.Arg})
 	if err != nil {
-		return MyResponse{Output: "error"}, fmt.Errorf("failed to execute app: %v", err)
+		return LambdaResponse{Output: "error"}, fmt.Errorf("failed to execute app: %v", err)
 	}
 
-	return MyResponse{Output: "success"}, nil
+	return LambdaResponse{Output: "success"}, nil
 }
 
 func main() {
