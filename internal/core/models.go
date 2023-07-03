@@ -3,36 +3,32 @@ package core
 import "time"
 
 type Showtime struct {
-	At      time.Time
-	LinkURL string
+	At      time.Time `json:"at"`
+	LinkURL string    `json:"link_url,omitempty"`
 }
 
 type Screening struct {
-	Location   string
-	SeriesName string
-	SeriesLink string
-	LinkURL    string
-	Showtimes  []Showtime
-	ImageURLs  []string
+	Location   string     `json:"location,omitempty"`
+	SeriesName string     `json:"series_name,omitempty"`
+	SeriesLink string     `json:"series_link,omitempty"`
+	LinkURL    string     `json:"link_url,omitempty"`
+	Showtimes  []Showtime `json:"showtimes,omitempty"`
+	ImageURLs  []string   `json:"image_urls,omitempty"`
 }
 
 type FormatSpecificAvailability struct {
-	Format string
-	Count  int
+	Format string `json:"format"`
+	Count  int    `json:"count"`
 }
 
 type Availability struct {
-	Location string
-	Formats  []FormatSpecificAvailability
+	Location string                       `json:"location"`
+	Formats  []FormatSpecificAvailability `json:"formats"`
 }
 
 type Movie struct {
-	Title      string
-	Screenings []Screening
+	Title      string      `json:"title"`
+	Screenings []Screening `json:"screenings"`
 	// Availability []Availability
-}
-
-type ExtendedMovie struct {
-	Movie
-	Data map[string]any
+	Data map[string]any `json:"data,omitempty"`
 }

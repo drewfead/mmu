@@ -28,7 +28,7 @@ type Scraper struct {
 	sync.Mutex
 }
 
-func (s *Scraper) ComingSoon(ctx context.Context) ([]core.ExtendedMovie, error) {
+func (s *Scraper) ComingSoon(ctx context.Context) ([]core.Movie, error) {
 	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "coming_soon")
 	defer span.End()
 
@@ -38,7 +38,7 @@ func (s *Scraper) ComingSoon(ctx context.Context) ([]core.ExtendedMovie, error) 
 	return s.calendar(ctx)
 }
 
-func (s *Scraper) NowPlaying(ctx context.Context) ([]core.ExtendedMovie, error) {
+func (s *Scraper) NowPlaying(ctx context.Context) ([]core.Movie, error) {
 	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "now_playing")
 	defer span.End()
 
@@ -249,7 +249,7 @@ func (s *Scraper) initCurrent(ctx context.Context) error {
 	}
 }
 
-func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
+func (s *Scraper) calendar(ctx context.Context) ([]core.Movie, error) {
 	ctx, span := otel.Tracer("hollywood.scraper").Start(ctx, "calendar")
 	defer span.End()
 
@@ -265,7 +265,7 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 	}
 
 	c := colly.NewCollector(colly.Async(true))
-	hits := make(chan core.ExtendedMovie)
+	hits := make(chan core.Movie)
 	errs := make(chan error)
 	c.OnRequest(scraping.InjectRequestHeaders(headers))
 	c.OnResponse(scraping.LogResponses(c))
@@ -325,6 +325,7 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 				if err != nil {
 					continue
 				}
+
 				hollywoodScreening.Showtimes = append(hollywoodScreening.Showtimes, core.Showtime{
 					At:      day.Add(timeOffset.Sub(time.Date(0, 0, 0, 0, 0, 0, 0, s.TimeZone))),
 					LinkURL: show.ticketLink,
@@ -332,11 +333,9 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 			}
 		}
 
-		out := core.ExtendedMovie{
-			Movie: core.Movie{
-				Title:      title,
-				Screenings: []core.Screening{hollywoodScreening},
-			},
+		out := core.Movie{
+			Title:      title,
+			Screenings: []core.Screening{hollywoodScreening},
 		}
 
 		hits <- out
@@ -351,7 +350,7 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 		c.Visit(s.BaseURL)
 	}()
 
-	var out []core.ExtendedMovie
+	var out []core.Movie
 	for {
 		select {
 		case <-ctx.Done():
