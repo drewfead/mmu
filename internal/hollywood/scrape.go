@@ -321,17 +321,13 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.Movie, error) {
 
 		for dayStr, times := range showtimes {
 			for _, show := range times {
-				day, err := time.Parse("Monday, January 2", dayStr)
-				if err != nil {
-					continue
+				var at time.Time
+				if dt, ok := ParseDateTime(dayStr, show.time, s.TimeZone); ok {
+					at = dt
 				}
-				timeOffset, err := time.Parse("3:04 PM", show.time)
-				if err != nil {
-					continue
-				}
-
+				// if datetime parsing fails, at will be time.Time{}, i.e. it.IsZero() will be true
 				hollywoodScreening.Showtimes = append(hollywoodScreening.Showtimes, core.Showtime{
-					At:      day.Add(timeOffset.Sub(time.Date(0, 0, 0, 0, 0, 0, 0, s.TimeZone))),
+					At:      at,
 					LinkURL: show.ticketLink,
 				})
 			}
