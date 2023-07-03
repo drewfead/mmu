@@ -41,7 +41,9 @@ func SimpleGet[OUT any](
 	})
 
 	go func() {
-		c.Visit(url)
+		if err := c.Visit(url); err != nil {
+			errs <- err
+		}
 	}()
 
 	var out []OUT

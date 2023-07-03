@@ -230,7 +230,11 @@ func (s *Scraper) initCurrent(ctx context.Context) error {
 		}
 	})
 
-	c.Visit(s.BaseURL)
+	go func() {
+		if err := c.Visit(s.BaseURL); err != nil {
+			errs <- err
+		}
+	}()
 
 	for {
 		select {
@@ -348,7 +352,9 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 	})
 
 	go func() {
-		c.Visit(s.BaseURL)
+		if err := c.Visit(s.BaseURL); err != nil {
+			errs <- err
+		}
 	}()
 
 	var out []core.ExtendedMovie
