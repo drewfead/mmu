@@ -274,7 +274,7 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 	c.OnHTML(".event-grid-item", func(e *colly.HTMLElement) {
 		seriesName := strings.TrimSpace(e.ChildText(".event-grid-header > a.event_list__series_name"))
 		seriesLink := e.ChildAttr(".event-grid-header > a.event_list__series_name", "href")
-		if !strings.HasPrefix(seriesLink, "https://") {
+		if len(seriesLink) > 0 && !strings.HasPrefix(seriesLink, "https://") {
 			seriesLink = fmt.Sprintf("%s/%s", s.BaseURL, strings.TrimPrefix(seriesLink, "/"))
 		}
 		dataEventID := e.ChildAttr(".event-grid-header > div > h3 > a", "data-event-id")
@@ -294,7 +294,7 @@ func (s *Scraper) calendar(ctx context.Context) ([]core.ExtendedMovie, error) {
 			}
 			carouselItem.ForEach("div.showtime-square > a", func(_ int, showtimeSq *colly.HTMLElement) {
 				ticketLink := showtimeSq.Attr("href")
-				if !strings.HasPrefix(ticketLink, "https://") {
+				if len(ticketLink) > 0 && !strings.HasPrefix(ticketLink, "https://") {
 					ticketLink = fmt.Sprintf("%s/%s", s.BaseURL, strings.TrimPrefix(ticketLink, "/"))
 				}
 				time := strings.TrimSpace(showtimeSq.Text)

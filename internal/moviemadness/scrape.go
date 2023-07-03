@@ -91,7 +91,7 @@ func (sc *Scraper) Search(
 			categorySearchLinks := h.ChildAttrs(searchResultCategoryClass+" > a", "href")
 			for i, link := range categorySearchLinks {
 				link = strings.ReplaceAll(link, " ", "+")
-				if !strings.HasPrefix(link, "https://") {
+				if len(link) > 0 && !strings.HasPrefix(link, "https://") {
 					link = fmt.Sprintf("%s/%s", sc.BaseURL, strings.TrimPrefix(link, "/"))
 				}
 				categorySearchLinks[i] = link
