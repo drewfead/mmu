@@ -37,6 +37,18 @@ mmu movie-madness [search terms ...]
 
 ## Development
 
+### Linting
+
+Use the make target `make lint`. Requires docker.
+
+### Building
+
+Use the make target `make build`. The binaries will be build in `./bin`.
+
+### Testing
+
+Use the make target `make test` to run unit tests. There are also ad-hoc tests which are skipped by default, but are useful to run with a debugger attached.
+
 ### Running Locally
 
 The CLI version of this module can be run from the project root using `go run` as follows:

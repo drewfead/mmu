@@ -59,9 +59,12 @@ func setup(ctx *cli.Context) []func() {
 		log.Fatalf("failed to initialize logger: %v", err)
 	}
 	zap.ReplaceGlobals(logger)
-	maxprocs.Set(maxprocs.Logger(func(format string, args ...interface{}) {
+	_, err = maxprocs.Set(maxprocs.Logger(func(format string, args ...interface{}) {
 		zap.L().Debug(fmt.Sprintf(format, args...))
 	}))
+	if err != nil {
+		log.Fatalf("failed to set maxprocs: %v", err)
+	}
 
 	var out []func()
 
