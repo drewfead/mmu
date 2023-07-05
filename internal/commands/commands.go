@@ -28,9 +28,10 @@ var (
 	}
 
 	verbosityFlag = &cli.StringFlag{
-		Name:  "verbosity",
-		Usage: "Set the verbosity of the logger",
-		Value: "info",
+		Name:    "verbosity",
+		Aliases: []string{"v"},
+		Usage:   "Set the verbosity of the logger",
+		Value:   "info",
 	}
 
 	outputFormatFlag = &cli.StringFlag{
