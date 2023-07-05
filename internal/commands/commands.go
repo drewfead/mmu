@@ -68,9 +68,15 @@ func setup(ctx *cli.Context) []func() {
 	}
 
 	var out []func()
+	_, err = maxprocs.Set(maxprocs.Logger(func(format string, args ...interface{}) {
+		zap.L().Debug(fmt.Sprintf(format, args...))
+	}))
+	if err != nil {
+		log.Fatalf("failed to set maxprocs: %v", err)
+	}
 
 	if ctx.Bool(profileFlag.Name) {
-		cpuProfile, err := os.Create("/tmp/cpu_profile.prof")
+		cpuProfile, err := os.CreateTemp("", "cpu_profile_*.prof")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -83,7 +89,7 @@ func setup(ctx *cli.Context) []func() {
 			pprof.StopCPUProfile()
 		})
 
-		memProfile, err := os.Create("/tmp/memory_profile.prof")
+		memProfile, err := os.CreateTemp("", "memory_profile_*.prof")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -100,7 +106,7 @@ func setup(ctx *cli.Context) []func() {
 	return out
 }
 
-func cleanup(ctx *cli.Context, steps ...func()) {
+func cleanup(_ *cli.Context, steps ...func()) {
 	for _, step := range steps {
 		step()
 	}

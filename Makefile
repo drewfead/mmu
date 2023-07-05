@@ -37,6 +37,12 @@ else
 endif
 
 ifeq ($(detected_os),windows)
+		MAKEDIR := mkdir
+else
+		MAKEDIR := mkdir -p
+endif
+
+ifeq ($(detected_os),windows)
 		PATH_DELIM := \\
 else
 		PATH_DELIM := /
@@ -46,16 +52,19 @@ endif
 
 clean:
 	$(RIMRAF) .$(PATH_DELIM)bin
+	$(RIMRAF) .$(PATH_DELIM)out
 
 build:
   # go commands use unix-style paths, even on windows 
 	go build -o ./bin/ ./...
 
 lint:
+	$(MAKEDIR) .$(PATH_DELIM)out
   # docker commands use unix-style paths, even on windows
-	docker run -t --rm -v $${PWD}:/app -w /app golangci/golangci-lint:v1.53.3 golangci-lint run
+	docker run -t --rm -v $${PWD}:/app -w /app golangci/golangci-lint:v1.53.3 golangci-lint run ./...
 
 test:
+	$(MAKEDIR) .$(PATH_DELIM)out
   # go commands use unix-style paths, even on windows
 	go test -v --race -run=Test_Unit ./...
 
