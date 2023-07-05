@@ -105,7 +105,7 @@ func cleanup(ctx *cli.Context, steps ...func()) {
 	}
 }
 
-func results(ctx *cli.Context, movies []core.ExtendedMovie) error {
+func results(ctx *cli.Context, movies []core.Movie) error {
 	switch ctx.String(outputFormatFlag.Name) {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
@@ -142,7 +142,7 @@ var Scrapers = []*cli.Command{
 				TimeZone: tz,
 			}
 
-			var movies []core.ExtendedMovie
+			var movies []core.Movie
 			if c.Bool(nowPlayingFlag.Name) {
 				movies, err = s.NowPlaying(context.Background())
 			} else {
