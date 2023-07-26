@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/drewfead/mmu/internal/core"
-	"github.com/drewfead/mmu/internal/scraping"
 	"github.com/gocolly/colly/v2"
 	"go.opentelemetry.io/otel"
+
+	"github.com/drewfead/mmu/internal/core"
+	"github.com/drewfead/mmu/internal/scraping"
 )
 
 type Scraper struct {
@@ -66,7 +67,7 @@ func (sc *Scraper) Search(
 	ctx context.Context,
 	field SearchField,
 	query string,
-) ([]core.ExtendedMovie, error) {
+) ([]core.Movie, error) {
 	ctx, span := otel.Tracer("moviemadness.scraper").Start(ctx, "search")
 	defer span.End()
 
@@ -86,20 +87,18 @@ func (sc *Scraper) Search(
 		searchURL,
 		map[string]string{"Referer": searchURL},
 		searchResultClass,
-		func(h *colly.HTMLElement) (core.ExtendedMovie, error) {
+		func(h *colly.HTMLElement) (core.Movie, error) {
 			title := h.ChildText(searchResultTitleClass + " > h3")
 			categorySearchLinks := h.ChildAttrs(searchResultCategoryClass+" > a", "href")
 			for i, link := range categorySearchLinks {
 				link = strings.ReplaceAll(link, " ", "+")
-				if !strings.HasPrefix(link, "https://") {
+				if len(link) > 0 && !strings.HasPrefix(link, "https://") {
 					link = fmt.Sprintf("%s/%s", sc.BaseURL, strings.TrimPrefix(link, "/"))
 				}
 				categorySearchLinks[i] = link
 			}
-			return core.ExtendedMovie{
-				Movie: core.Movie{
-					Title: title,
-				},
+			return core.Movie{
+				Title: title,
 				Data: map[string]any{
 					"categorySearchLinks": categorySearchLinks,
 				},

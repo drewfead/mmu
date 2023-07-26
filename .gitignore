@@ -1,4 +1,6 @@
 **/.history
+**/bin/
+**/out/
 **/__debug_bin
 
 # Local .terraform directories
