@@ -48,6 +48,8 @@ else
 		PATH_DELIM := /
 endif
 
+BUILD_DIR := lambda/bin
+
 .PHONY: clean build lint test
 
 clean:
@@ -68,3 +70,11 @@ test:
   # go commands use unix-style paths, even on windows
 	go test -v --race -run=Test_Unit ./...
 
+all-lambda: clean-lambda build-lambda
+
+clean-lambda:
+	@rm -rf ${BUILD_DIR}
+
+build-lambda:
+	cd lambda/scraper-lambda && env GOOS=linux GOARCH=amd64 go build -o ../bin/mmu main.go
+	cd lambda/bin && zip -r lambda-handler.zip .

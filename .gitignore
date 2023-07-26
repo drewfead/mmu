@@ -1,4 +1,13 @@
-**/.history/
+**/.history
 **/bin/
 **/out/
 **/__debug_bin
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+lambda/bin
